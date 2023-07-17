@@ -116,10 +116,7 @@ void *msgqueue_get(msgqueue_t *queue)
 		queue->get_head->next = queue->get_head->next->next;
 	}
 	else
-	{
 		msg = NULL;
-		errno = ENOENT;
-	}
 
 	pthread_mutex_unlock(&queue->get_mutex);
 	return msg;
