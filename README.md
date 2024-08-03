@@ -112,6 +112,18 @@ struct thrdpool_task
 
 函数返回0表示成功，此时线程池增加了一个线程。返回-1表示失败，并设置errno。  
 
+### 减少线程
+**int thrdpool_decrease(thrdpool_t \*pool);**
+
+@pool:  线程池对象。  
+
+函数返回-1表示失败，并设置errno。当函数返回0代表成功，存在三种情况：
+* 当前有空闲线程，那么会有一个空闲线程退出。
+* 所有线程都正在工作，第一个进入空闲的线程将会退出。
+* 逻辑上线程数已经为负数，下一个被增加的线程会直接退出。
+
+注意函数不会等待线程退出完毕，而总是立刻返回。
+
 ### 判断当前线程是否为线程池里的线程
 
 **int thrdpool_in_pool(thrdpool_t \*pool);**  
@@ -119,6 +131,14 @@ struct thrdpool_task
 @pool:  线程池对象。  
 
 如果当前线程是线程池线程，返回1，否则返回0。  
+
+### 退出当前线程
+
+**void thrdpool_exit(thrdpool_t \*pool);**
+
+@pool:  线程池对象。  
+
+如果当前线程是线程池中的线程，立即退出并且线程池减少一个线程。如果调用线程不是在线程池中，无任何行为。
 
 ### 销毁线程池
 **void thrdpool_destroy(void (\*pending)(const struct thrdpool_task \*), thrdpool_t \*pool);**  
