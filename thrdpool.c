@@ -17,8 +17,8 @@
 */
 
 #include <errno.h>
-#include <pthread.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include "msgqueue.h"
 #include "thrdpool.h"
 
@@ -126,19 +126,25 @@ static int __thrdpool_create_threads(size_t nthreads, thrdpool_t *pool)
 	if (ret == 0)
 	{
 		if (pool->stacksize)
-			pthread_attr_setstacksize(&attr, pool->stacksize);
+			ret = pthread_attr_setstacksize(&attr, pool->stacksize);
 
-		while (pool->nthreads < nthreads)
+		if (ret == 0)
 		{
-			ret = pthread_create(&tid, &attr, __thrdpool_routine, pool);
-			if (ret == 0)
-				pool->nthreads++;
-			else
-				break;
+			pthread_mutex_lock(&pool->mutex);
+			while (pool->nthreads < nthreads)
+			{
+				ret = pthread_create(&tid, &attr, __thrdpool_routine, pool);
+				if (ret == 0)
+					pool->nthreads++;
+				else
+					break;
+			}
+
+			pthread_mutex_unlock(&pool->mutex);
 		}
 
 		pthread_attr_destroy(&attr);
-		if (pool->nthreads == nthreads)
+		if (ret == 0)
 			return 0;
 
 		__thrdpool_terminate(0, pool);
@@ -187,9 +193,6 @@ thrdpool_t *thrdpool_create(size_t nthreads, size_t stacksize)
 	return NULL;
 }
 
-inline void __thrdpool_schedule(const struct thrdpool_task *task, void *buf,
-								thrdpool_t *pool);
-
 void __thrdpool_schedule(const struct thrdpool_task *task, void *buf,
 						 thrdpool_t *pool)
 {
@@ -210,8 +213,6 @@ int thrdpool_schedule(const struct thrdpool_task *task, thrdpool_t *pool)
 	return -1;
 }
 
-inline int thrdpool_in_pool(thrdpool_t *pool);
-
 int thrdpool_in_pool(thrdpool_t *pool)
 {
 	return pthread_getspecific(pool->key) == pool;
@@ -227,14 +228,18 @@ int thrdpool_increase(thrdpool_t *pool)
 	if (ret == 0)
 	{
 		if (pool->stacksize)
-			pthread_attr_setstacksize(&attr, pool->stacksize);
+			ret = pthread_attr_setstacksize(&attr, pool->stacksize);
 
-		pthread_mutex_lock(&pool->mutex);
-		ret = pthread_create(&tid, &attr, __thrdpool_routine, pool);
 		if (ret == 0)
-			pool->nthreads++;
+		{
+			pthread_mutex_lock(&pool->mutex);
+			ret = pthread_create(&tid, &attr, __thrdpool_routine, pool);
+			if (ret == 0)
+				pool->nthreads++;
 
-		pthread_mutex_unlock(&pool->mutex);
+			pthread_mutex_unlock(&pool->mutex);
+		}
+
 		pthread_attr_destroy(&attr);
 		if (ret == 0)
 			return 0;
